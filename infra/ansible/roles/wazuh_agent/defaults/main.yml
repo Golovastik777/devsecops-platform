@@ -1,0 +1,7 @@
+wazuh_agent_manager_address: ""
+wazuh_agent_group: default
+wazuh_agent_major_version: "4.x"
+# Extra JSON logs to ship (application security events, Falco output on VMs).
+wazuh_agent_json_logs:
+  - /var/log/kb-assistant/security.json
+  - /var/log/falco/events.json

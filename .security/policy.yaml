@@ -1,0 +1,9 @@
+# Security gate policy (ci/security_gate.py)
+block_severities: [CRITICAL, HIGH]
+# Any failed IaC check blocks the merge. A check that does not apply is skipped inline
+# next to the resource with a justification (checkov:skip=<ID>:<reason>).
+block_iac_failures: true
+# Dependency / image CVEs without a released fix are reported and tracked in DefectDojo,
+# but do not block: there is nothing to upgrade to yet.
+ignore_unfixed: true
+max_exception_days: 90

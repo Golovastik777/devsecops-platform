@@ -1,0 +1,227 @@
+name: devsecops
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * 1" # weekly re-scan: new CVEs appear without code changes
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REPORTS_DIR: reports
+  IMAGE: ghcr.io/golovastik777/kb-assistant:ci
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Install locked dependencies (hash-checked)
+        run: pip install --require-hashes -r app/requirements.txt -r app/requirements-dev.txt -r ci/requirements.txt
+      - name: App tests (guardrails, API, access control)
+        run: cd app && python -m pytest
+      - name: Pipeline tests (parsers, gate, DefectDojo, AI triage)
+        run: python -m pytest -q ci/tests triage/tests
+
+  secrets:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # scan the full history, not just the last commit
+          persist-credentials: false
+      - run: bash ci/scan-secrets.sh
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-secrets
+          path: reports/
+
+  sast:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: bash ci/scan-sast.sh
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-sast
+          path: reports/
+
+  sca:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: bash ci/scan-deps.sh
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-sca
+          path: reports/
+
+  iac:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: bash ci/scan-iac.sh
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-iac
+          path: reports/
+
+  policy-tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+      - name: Ansible lint (production profile)
+        working-directory: infra/ansible
+        run: |
+          pip install --require-hashes -r requirements.txt
+          ansible-galaxy collection install -r requirements.yml
+          ansible-playbook --syntax-check hardening.yml
+          ansible-lint --offline hardening.yml roles/
+      - name: Kyverno, Falco, Terraform, kubeconform, Nuclei templates, Wazuh rules
+        run: bash ci/test-policies.sh
+
+  image:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: bash ci/build-image.sh
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-image
+          path: reports/
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: image
+          path: .cache/images/kb-assistant.tar
+          retention-days: 1
+
+  dast:
+    needs: image
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: image
+          path: .cache/images
+      - run: docker load -i .cache/images/kb-assistant.tar
+      - run: bash ci/run-app.sh
+      - name: ZAP baseline, Nuclei, LLM red-team
+        run: bash ci/dast.sh
+      - name: App security log (guardrail events)
+        if: always()
+        run: docker logs kb-assistant-dast 2>&1 | grep '"event"' | tail -50 || true
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: reports-dast
+          path: reports/
+
+  k8s-e2e:
+    needs: image
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: image
+          path: .cache/images
+      - run: docker load -i .cache/images/kb-assistant.tar
+      - uses: helm/kind-action@1544676c07bb3570fcb70166beaa07c4528fd4aa # v1.15.1
+        with:
+          version: v0.33.0
+          cluster_name: devsecops
+      - name: Kyverno + PSA admission, rollout, NetworkPolicy
+        env:
+          KIND_CLUSTER: devsecops
+        run: bash ci/e2e-kind.sh
+      - name: Cluster state on failure
+        if: failure()
+        run: |
+          kubectl get pods -A -o wide
+          kubectl -n kb-assistant describe pods
+          kubectl get policyreports -A || true
+
+  security-gate:
+    needs: [unit-tests, secrets, sast, sca, iac, policy-tests, image, dast, k8s-e2e]
+    if: always()
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      security-events: write # upload SARIF to code scanning
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - run: pip install --require-hashes -r ci/requirements.txt
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: reports-*
+          path: reports
+          merge-multiple: true
+      - name: Security gate
+        id: gate
+        continue-on-error: true
+        run: python ci/security_gate.py
+      - name: Upload SARIF to GitHub code scanning
+        if: always()
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@1fc58d04a4d4374f921bdac573c3811c240f9c26 # v4.39.2
+        with:
+          sarif_file: reports/security.sarif
+          category: devsecops-pipeline
+      - name: Import into DefectDojo
+        if: always()
+        env:
+          DD_URL: ${{ secrets.DD_URL }}
+          DD_API_KEY: ${{ secrets.DD_API_KEY }}
+        run: python ci/upload_defectdojo.py
+      - name: AI triage (advisory, never changes the gate result)
+        if: always()
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python triage/ai_triage.py
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: security-reports
+          path: reports/
+      - name: Fail on gate result or failed jobs
+        if: always()
+        run: |
+          echo "gate: ${{ steps.gate.outcome }}; jobs: ${{ join(needs.*.result, ', ') }}"
+          [ "${{ steps.gate.outcome }}" = "success" ]
+          ! grep -qE 'failure|cancelled' <<< "${{ join(needs.*.result, ' ') }}"

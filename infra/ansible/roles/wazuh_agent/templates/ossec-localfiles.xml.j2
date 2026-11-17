@@ -1,0 +1,9 @@
+<!-- Managed by Ansible (wazuh_agent): JSON security logs -->
+<ossec_config>
+{% for path in wazuh_agent_json_logs %}
+  <localfile>
+    <log_format>json</log_format>
+    <location>{{ path }}</location>
+  </localfile>
+{% endfor %}
+</ossec_config>

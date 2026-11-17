@@ -1,0 +1,13 @@
+# Accepted Trivy misconfiguration findings. Every entry is a design decision with a reason;
+# time-limited risk acceptances go to .security/accepted-risks.yaml instead.
+misconfigurations:
+  - id: KSV-0125
+    paths: ["deploy/k8s/base/deployment.yaml"]
+    statement: >
+      Trivy's default trusted-registry list does not include ghcr.io. The registry allowlist
+      (ghcr.io/golovastik777/) is enforced at admission by Kyverno policy restrict-images.
+  - id: KSV-0048
+    paths: ["deploy/k8s/base/rbac-ci.yaml"]
+    statement: >
+      A deployer must patch its Deployment. The rule is limited with resourceNames to the single
+      kb-assistant Deployment in one namespace; it cannot create pods or other workloads.

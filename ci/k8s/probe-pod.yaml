@@ -1,0 +1,23 @@
+# Network probe used by ci/e2e-kind.sh; complies with every cluster policy.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: probe
+  namespace: __NS__
+spec:
+  restartPolicy: Never
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 100
+    seccompProfile: {type: RuntimeDefault}
+  containers:
+    - name: probe
+      image: curlimages/curl:8.23.0
+      command: ["curl", "-fsS", "-m", "5", "-o", "/dev/null", "-w", "%{http_code}", "http://kb-assistant.kb-assistant.svc/healthz"]
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities: {drop: ["ALL"]}
+      resources:
+        requests: {cpu: 10m, memory: 16Mi}
+        limits: {memory: 32Mi}

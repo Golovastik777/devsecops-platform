@@ -1,0 +1,124 @@
+# GitLab CI version of the pipeline. Jobs call the same ci/*.sh scripts as GitHub Actions
+# and Jenkins, so scanner flags and versions live in one place (ci/lib.sh).
+#
+# Runner: shell executor on a host with Docker, kind, kubectl, helm and python3
+# (tag "docker-host"). Tools run from their pinned images via `docker run`.
+#
+# CI/CD variables (masked, protected): DD_URL, DD_API_KEY, ANTHROPIC_API_KEY.
+
+stages: [test, scan, build, dynamic, report]
+
+default:
+  tags: [docker-host]
+  interruptible: true
+
+variables:
+  REPORTS_DIR: reports
+  IMAGE: ghcr.io/golovastik777/kb-assistant:ci
+  GIT_DEPTH: "0" # full history for secret scanning
+
+.reports: &reports
+  artifacts:
+    when: always
+    expire_in: 14 days
+    paths: [reports/]
+
+.python: &python
+  before_script:
+    - python3 -m venv .venv
+    - .venv/bin/pip install -q --require-hashes -r ci/requirements.txt
+    - export PATH="$PWD/.venv/bin:$PATH"
+
+unit-tests:
+  stage: test
+  script:
+    - python3 -m venv .venv
+    - .venv/bin/pip install -q --require-hashes -r app/requirements.txt -r app/requirements-dev.txt -r ci/requirements.txt
+    - (cd app && ../.venv/bin/python -m pytest --junitxml=../reports/junit-app.xml)
+    - .venv/bin/python -m pytest -q ci/tests triage/tests --junitxml=reports/junit-ci.xml
+  artifacts:
+    when: always
+    reports:
+      junit: reports/junit-*.xml
+
+secrets:
+  stage: scan
+  script: [bash ci/scan-secrets.sh]
+  <<: *reports
+
+sast:
+  stage: scan
+  script: [bash ci/scan-sast.sh]
+  <<: *reports
+
+sca:
+  stage: scan
+  script: [bash ci/scan-deps.sh]
+  <<: *reports
+
+iac:
+  stage: scan
+  script: [bash ci/scan-iac.sh]
+  <<: *reports
+
+policy-tests:
+  stage: scan
+  script:
+    - python3 -m venv .venv-ansible
+    - .venv-ansible/bin/pip install -q --require-hashes -r infra/ansible/requirements.txt
+    - export PATH="$PWD/.venv-ansible/bin:$PATH"
+    - (cd infra/ansible && ansible-galaxy collection install -r requirements.yml && ansible-lint --offline hardening.yml roles/)
+    - bash ci/test-policies.sh
+
+image:
+  stage: build
+  script: [bash ci/build-image.sh]
+  <<: *reports
+
+dast:
+  stage: dynamic
+  needs: [image]
+  script:
+    - bash ci/run-app.sh
+    - bash ci/dast.sh
+  after_script:
+    - docker logs kb-assistant-dast 2>&1 | grep '"event"' | tail -50 || true
+    - docker rm -f kb-assistant-dast || true
+  <<: *reports
+
+k8s-e2e:
+  stage: dynamic
+  needs: [image]
+  variables:
+    KIND_CLUSTER: devsecops-$CI_PIPELINE_ID
+  script: [bash ci/e2e-kind.sh]
+  after_script:
+    - kind delete cluster --name "devsecops-$CI_PIPELINE_ID" || true
+
+security-gate:
+  stage: report
+  when: always
+  <<: [*python, *reports]
+  script:
+    - python ci/security_gate.py
+
+defectdojo:
+  stage: report
+  when: always
+  needs: [secrets, sast, sca, iac, image, dast]
+  <<: *python
+  script:
+    - python ci/security_gate.py --no-fail
+    - python ci/upload_defectdojo.py
+  rules:
+    - if: $DD_URL && $DD_API_KEY
+
+ai-triage:
+  stage: report
+  when: always
+  needs: [secrets, sast, sca, iac, image, dast]
+  allow_failure: true # advisory only
+  <<: [*python, *reports]
+  script:
+    - python ci/security_gate.py --no-fail
+    - python triage/ai_triage.py

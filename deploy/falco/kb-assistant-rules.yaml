@@ -1,0 +1,78 @@
+# Runtime detection for kb-assistant. Loaded after the default falco_rules.yaml,
+# so it reuses its macros (spawned_process, outbound, open_read, sensitive_files, ...).
+# Events go to Falcosidekick -> Wazuh / ELK; see deploy/wazuh/local_rules.xml.
+
+- list: kb_assistant_images
+  items: [ghcr.io/golovastik777/kb-assistant]
+
+- macro: kb_assistant_container
+  condition: (container.image.repository in (kb_assistant_images))
+
+- list: kb_assistant_allowed_ports
+  items: [53, 443]
+
+- list: kb_miner_ports
+  items: [3333, 3334, 3357, 4444, 5555, 5556, 5588, 5730, 6099, 6666, 7777, 7778, 8899, 9999, 14433, 14444, 45560, 45700]
+
+- rule: Shell spawned in kb-assistant container
+  desc: >
+    The image runs a single Python process and never needs a shell. A shell means remote code
+    execution through the app or an interactive kubectl exec - both need investigation.
+  condition: spawned_process and kb_assistant_container and proc.name in (shell_binaries)
+  output: >
+    Shell in kb-assistant (user=%user.name cmd=%proc.cmdline parent=%proc.pname
+    pod=%k8s.pod.name ns=%k8s.ns.name image=%container.image.repository:%container.image.tag)
+  priority: CRITICAL
+  tags: [kb_assistant, container, shell, mitre_execution, T1059]
+
+- rule: Unexpected process in kb-assistant container
+  desc: Only uvicorn/python is expected; package managers or download tools point to a compromise.
+  condition: >
+    spawned_process and kb_assistant_container
+    and proc.name in (pip, pip3, apt, apt-get, curl, wget, nc, ncat, socat, ssh, scp)
+  output: >
+    Unexpected process in kb-assistant (cmd=%proc.cmdline parent=%proc.pname pod=%k8s.pod.name ns=%k8s.ns.name)
+  priority: ERROR
+  tags: [kb_assistant, container, mitre_execution, T1105]
+
+- rule: Unexpected outbound connection from kb-assistant
+  desc: The app only needs DNS and HTTPS (LLM API). Anything else is exfiltration or C2.
+  condition: outbound and kb_assistant_container and not fd.sport in (kb_assistant_allowed_ports)
+  output: >
+    Unexpected outbound connection from kb-assistant (connection=%fd.name port=%fd.sport
+    cmd=%proc.cmdline pod=%k8s.pod.name ns=%k8s.ns.name)
+  priority: ERROR
+  tags: [kb_assistant, network, mitre_exfiltration, TA0010]
+
+- rule: Outbound SSH from a container
+  desc: >
+    Containers in this cluster have no reason to open SSH sessions. A burst of outbound SSH
+    is the typical sign of a compromised workload scanning or brute-forcing other hosts.
+  condition: outbound and container and fd.sport = 22 and not proc.name in (ssh_allowed_tools)
+  output: >
+    Outbound SSH from container (connection=%fd.name cmd=%proc.cmdline image=%container.image.repository
+    pod=%k8s.pod.name ns=%k8s.ns.name)
+  priority: WARNING
+  tags: [network, mitre_lateral_movement, T1021.004]
+
+- list: ssh_allowed_tools
+  items: []
+
+- rule: Connection to cryptomining pool port
+  desc: Outbound connection to a port commonly used by Stratum mining pools.
+  condition: outbound and container and fd.sport in (kb_miner_ports)
+  output: >
+    Possible cryptominer connection (connection=%fd.name cmd=%proc.cmdline image=%container.image.repository
+    pod=%k8s.pod.name ns=%k8s.ns.name)
+  priority: CRITICAL
+  tags: [network, mitre_impact, T1496]
+
+- rule: Sensitive file read in kb-assistant container
+  desc: The app reads only its knowledge base and mounted secrets under /var/run/secrets/{llm,staff}.
+  condition: >
+    open_read and kb_assistant_container and (sensitive_files
+    or fd.name startswith /var/run/secrets/kubernetes.io/serviceaccount)
+  output: >
+    Sensitive file read in kb-assistant (file=%fd.name cmd=%proc.cmdline pod=%k8s.pod.name ns=%k8s.ns.name)
+  priority: WARNING
+  tags: [kb_assistant, filesystem, mitre_credential_access, T1552]

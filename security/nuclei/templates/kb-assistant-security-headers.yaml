@@ -1,0 +1,33 @@
+id: kb-assistant-security-headers
+
+info:
+  name: kb-assistant - security headers missing
+  author: golovastik777
+  severity: medium
+  description: Responses must carry CSP, nosniff and frame protection headers.
+  tags: kb-assistant,headers,misconfig
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/healthz"
+    matchers-condition: or
+    matchers:
+      - type: word
+        part: header
+        name: missing-csp
+        words: ["content-security-policy"]
+        case-insensitive: true
+        negative: true
+      - type: word
+        part: header
+        name: missing-nosniff
+        words: ["x-content-type-options: nosniff"]
+        case-insensitive: true
+        negative: true
+      - type: word
+        part: header
+        name: missing-frame-protection
+        words: ["x-frame-options: deny"]
+        case-insensitive: true
+        negative: true

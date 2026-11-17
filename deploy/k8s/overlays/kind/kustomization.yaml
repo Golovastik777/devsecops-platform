@@ -1,0 +1,10 @@
+# Overlay for the kind e2e job: locally built image, loaded into the cluster.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+images:
+  - name: ghcr.io/golovastik777/kb-assistant
+    newTag: ci
+patches:
+  - path: patches/pull-policy.yaml

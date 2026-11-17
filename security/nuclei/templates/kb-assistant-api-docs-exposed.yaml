@@ -1,0 +1,24 @@
+id: kb-assistant-api-docs-exposed
+
+info:
+  name: kb-assistant - interactive API docs exposed
+  author: golovastik777
+  severity: low
+  description: Swagger UI, ReDoc or the OpenAPI schema is reachable in a production build.
+  tags: kb-assistant,exposure
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/docs"
+      - "{{BaseURL}}/redoc"
+      - "{{BaseURL}}/openapi.json"
+    stop-at-first-match: true
+    matchers-condition: and
+    matchers:
+      - type: status
+        status: [200]
+      - type: word
+        words: ["swagger", "openapi", "redoc"]
+        condition: or
+        case-insensitive: true

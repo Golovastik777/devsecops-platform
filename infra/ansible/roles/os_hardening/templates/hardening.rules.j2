@@ -1,0 +1,12 @@
+## Managed by Ansible (os_hardening). CIS-style audit rules.
+-w /etc/passwd -p wa -k identity
+-w /etc/group -p wa -k identity
+-w /etc/shadow -p wa -k identity
+-w /etc/sudoers -p wa -k scope
+-w /etc/sudoers.d/ -p wa -k scope
+-w /etc/ssh/sshd_config -p wa -k sshd
+-w /etc/ssh/sshd_config.d/ -p wa -k sshd
+-w /var/log/auth.log -p wa -k logins
+-a always,exit -F arch=b64 -S execve -F euid=0 -F auid>=1000 -F auid!=unset -k root_commands
+-a always,exit -F arch=b64 -S init_module,finit_module,delete_module -k kernel_modules
+-a always,exit -F arch=b64 -S sethostname,setdomainname -k system_locale

@@ -1,0 +1,15 @@
+#cloud-config
+# Key-only access from the first boot. Full hardening is applied by Ansible.
+users:
+  - name: ops
+    groups: [sudo]
+    shell: /bin/bash
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+    lock_passwd: true
+    ssh_authorized_keys:
+      - ${admin_ssh_public_key}
+disable_root: true
+ssh_pwauth: false
+package_update: true
+package_upgrade: true
+packages: [unattended-upgrades, auditd, fail2ban]

@@ -1,0 +1,11 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kb-assistant
+  namespace: kb-assistant
+spec:
+  template:
+    spec:
+      containers:
+        - name: app
+          imagePullPolicy: IfNotPresent

@@ -1,0 +1,11 @@
+# CIS-inspired baseline for Ubuntu 24.04 hosts (security tooling and bastion VMs).
+- name: Harden Linux hosts
+  hosts: all
+  become: true
+  roles:
+    - role: os_hardening
+      tags: [os]
+    - role: ssh_hardening
+      tags: [ssh]
+    - role: wazuh_agent
+      tags: [wazuh]

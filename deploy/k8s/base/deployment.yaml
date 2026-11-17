@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kb-assistant
+  namespace: kb-assistant
+  labels:
+    app.kubernetes.io/name: kb-assistant
+  annotations:
+    checkov.io/skip1: CKV_K8S_43=Digest is pinned by the release overlay; base keeps a tag for local and kind e2e builds
+spec:
+  replicas: 2
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kb-assistant
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kb-assistant
+    spec:
+      serviceAccountName: kb-assistant
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: app
+          image: ghcr.io/golovastik777/kb-assistant:0.1.0
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: ANTHROPIC_API_KEY_FILE
+              value: /var/run/secrets/llm/api-key
+            - name: STAFF_TOKEN_FILE
+              value: /var/run/secrets/staff/token
+          securityContext:
+            allowPrivilegeEscalation: false
+            privileged: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 96Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: llm-api-key
+              mountPath: /var/run/secrets/llm
+              readOnly: true
+            - name: staff-token
+              mountPath: /var/run/secrets/staff
+              readOnly: true
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 16Mi
+        # Secrets are mounted as files, never as environment variables. Both are optional:
+        # without them the service runs in extractive mode with public scope only.
+        - name: llm-api-key
+          secret:
+            secretName: kb-assistant-llm
+            optional: true
+        - name: staff-token
+          secret:
+            secretName: kb-assistant-staff
+            optional: true

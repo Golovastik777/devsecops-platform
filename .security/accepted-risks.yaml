@@ -1,0 +1,9 @@
+# Time-limited risk acceptances. Each entry needs: match, reason, owner, expires (<= 90 days).
+# The gate fails on expired or incomplete entries, so exceptions cannot silently live forever.
+#
+# Example:
+#   - match: {tool: trivy, rule_id: CVE-2026-12345}
+#     reason: Vulnerable function is not reachable; upstream fix scheduled for 2.4.1
+#     owner: security@platform
+#     expires: 2027-01-31
+accepted: []

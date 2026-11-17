@@ -1,0 +1,21 @@
+# Managed by Ansible (ssh_hardening). Key-only access, no root, modern crypto.
+Port {{ ssh_hardening_port }}
+PermitRootLogin no
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PubkeyAuthentication yes
+PermitEmptyPasswords no
+AuthenticationMethods publickey
+AllowGroups {{ ssh_hardening_allowed_groups | join(' ') }}
+MaxAuthTries {{ ssh_hardening_max_auth_tries }}
+LoginGraceTime 30
+ClientAliveInterval {{ ssh_hardening_client_alive_interval }}
+ClientAliveCountMax 2
+X11Forwarding no
+AllowAgentForwarding no
+AllowTcpForwarding no
+PermitTunnel no
+LogLevel VERBOSE
+Ciphers {{ ssh_hardening_ciphers | join(',') }}
+MACs {{ ssh_hardening_macs | join(',') }}
+KexAlgorithms {{ ssh_hardening_kex | join(',') }}

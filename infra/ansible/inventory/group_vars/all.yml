@@ -1,0 +1,3 @@
+ssh_hardening_allowed_groups: [sudo]
+wazuh_agent_manager_address: 10.40.1.10
+wazuh_agent_group: security_tools

@@ -1,0 +1,34 @@
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: kb-assistant-policies
+policies:
+  - ../policies/disallow-privileged.yaml
+  - ../policies/require-non-root.yaml
+  - ../policies/require-drop-all-capabilities.yaml
+  - ../policies/disallow-host-access.yaml
+  - ../policies/restrict-images.yaml
+resources:
+  - resources/bad-pods.yaml
+  - resources/app-deployment.yaml
+results:
+  # The real application manifest passes every rule.
+  - {policy: disallow-privileged, rule: autogen-no-privileged-no-escalation, kind: Deployment, resources: [kb-assistant], result: pass}
+  - {policy: require-non-root, rule: autogen-run-as-non-root, kind: Deployment, resources: [kb-assistant], result: pass}
+  - {policy: require-non-root, rule: autogen-read-only-root-filesystem, kind: Deployment, resources: [kb-assistant], result: pass}
+  - {policy: require-drop-all-capabilities, rule: autogen-drop-all, kind: Deployment, resources: [kb-assistant], result: pass}
+  - {policy: disallow-host-access, rule: autogen-host-namespaces, kind: Deployment, resources: [kb-assistant], result: pass}
+  - {policy: disallow-host-access, rule: autogen-host-path, kind: Deployment, resources: [kb-assistant], result: pass}
+  - {policy: restrict-images, rule: autogen-trusted-registry, kind: Deployment, resources: [kb-assistant], result: pass}
+  - {policy: restrict-images, rule: autogen-no-latest-tag, kind: Deployment, resources: [kb-assistant], result: pass}
+  - {policy: restrict-images, rule: autogen-requests-and-limits, kind: Deployment, resources: [kb-assistant], result: pass}
+  # Each bad pod is rejected by the rule it violates.
+  - {policy: disallow-privileged, rule: no-privileged-no-escalation, kind: Pod, resources: [privileged], result: fail}
+  - {policy: require-non-root, rule: run-as-non-root, kind: Pod, resources: [root-user], result: fail}
+  - {policy: require-non-root, rule: read-only-root-filesystem, kind: Pod, resources: [writable-rootfs], result: fail}
+  - {policy: require-drop-all-capabilities, rule: drop-all, kind: Pod, resources: [keeps-capabilities], result: fail}
+  - {policy: disallow-host-access, rule: host-namespaces, kind: Pod, resources: [host-network], result: fail}
+  - {policy: disallow-host-access, rule: host-path, kind: Pod, resources: [host-path], result: fail}
+  - {policy: restrict-images, rule: trusted-registry, kind: Pod, resources: [foreign-registry], result: fail}
+  - {policy: restrict-images, rule: no-latest-tag, kind: Pod, resources: [latest-tag], result: fail}
+  - {policy: restrict-images, rule: requests-and-limits, kind: Pod, resources: [no-limits], result: fail}

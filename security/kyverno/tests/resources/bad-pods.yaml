@@ -1,0 +1,105 @@
+# Each pod violates exactly one policy rule; kyverno-test.yaml lists the expected failures.
+# The last four pass Pod Security Admission "restricted" and are stopped only by Kyverno
+# (read-only rootfs, registry, tag and limits are organisation rules PSA does not cover).
+apiVersion: v1
+kind: Pod
+metadata: {name: privileged, namespace: kb-assistant}
+spec:
+  securityContext: {runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}
+  containers:
+    - name: c
+      image: ghcr.io/golovastik777/kb-assistant:0.1.0
+      securityContext: {privileged: true, allowPrivilegeEscalation: true, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+      resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {memory: 32Mi}}
+---
+apiVersion: v1
+kind: Pod
+metadata: {name: root-user, namespace: kb-assistant}
+spec:
+  securityContext: {seccompProfile: {type: RuntimeDefault}}
+  containers:
+    - name: c
+      image: ghcr.io/golovastik777/kb-assistant:0.1.0
+      securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+      resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {memory: 32Mi}}
+---
+apiVersion: v1
+kind: Pod
+metadata: {name: writable-rootfs, namespace: kb-assistant}
+spec:
+  securityContext: {runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}
+  containers:
+    - name: c
+      image: ghcr.io/golovastik777/kb-assistant:0.1.0
+      securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: false, capabilities: {drop: [ALL]}}
+      resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {memory: 32Mi}}
+---
+apiVersion: v1
+kind: Pod
+metadata: {name: keeps-capabilities, namespace: kb-assistant}
+spec:
+  securityContext: {runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}
+  containers:
+    - name: c
+      image: ghcr.io/golovastik777/kb-assistant:0.1.0
+      securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {add: [NET_ADMIN]}}
+      resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {memory: 32Mi}}
+---
+apiVersion: v1
+kind: Pod
+metadata: {name: host-network, namespace: kb-assistant}
+spec:
+  hostNetwork: true
+  securityContext: {runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}
+  containers:
+    - name: c
+      image: ghcr.io/golovastik777/kb-assistant:0.1.0
+      securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+      resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {memory: 32Mi}}
+---
+apiVersion: v1
+kind: Pod
+metadata: {name: host-path, namespace: kb-assistant}
+spec:
+  securityContext: {runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}
+  containers:
+    - name: c
+      image: ghcr.io/golovastik777/kb-assistant:0.1.0
+      securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+      resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {memory: 32Mi}}
+      volumeMounts: [{name: host, mountPath: /host}]
+  volumes:
+    - name: host
+      hostPath: {path: /}
+---
+apiVersion: v1
+kind: Pod
+metadata: {name: foreign-registry, namespace: kb-assistant}
+spec:
+  securityContext: {runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}
+  containers:
+    - name: c
+      image: docker.io/library/nginx:1.29
+      securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+      resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {memory: 32Mi}}
+---
+apiVersion: v1
+kind: Pod
+metadata: {name: latest-tag, namespace: kb-assistant}
+spec:
+  securityContext: {runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}
+  containers:
+    - name: c
+      image: ghcr.io/golovastik777/kb-assistant:latest
+      securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+      resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {memory: 32Mi}}
+---
+apiVersion: v1
+kind: Pod
+metadata: {name: no-limits, namespace: kb-assistant}
+spec:
+  securityContext: {runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}
+  containers:
+    - name: c
+      image: ghcr.io/golovastik777/kb-assistant:0.1.0
+      securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}

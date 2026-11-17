@@ -1,0 +1,65 @@
+- name: Remove legacy network clients
+  ansible.builtin.apt:
+    name: "{{ os_hardening_packages_absent }}"
+    state: absent
+    purge: true
+
+- name: Install audit, AppArmor and unattended upgrades
+  ansible.builtin.apt:
+    name: "{{ os_hardening_packages_present }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Kernel and network hardening (sysctl)
+  ansible.posix.sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    sysctl_file: /etc/sysctl.d/60-hardening.conf
+    sysctl_set: true
+    state: present
+    reload: true
+  loop: "{{ os_hardening_sysctl | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+
+- name: Audit rules for identity, privilege and SSH config changes
+  ansible.builtin.template:
+    src: hardening.rules.j2
+    dest: /etc/audit/rules.d/50-hardening.rules
+    owner: root
+    group: root
+    mode: "0640"
+  notify: Load audit rules
+
+- name: Security-only unattended upgrades
+  ansible.builtin.template:
+    src: 50unattended-upgrades.j2
+    dest: /etc/apt/apt.conf.d/50unattended-upgrades
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Restrict cron and at to root
+  ansible.builtin.copy:
+    content: "root\n"
+    dest: "/etc/{{ item }}.allow"
+    owner: root
+    group: root
+    mode: "0600"
+  loop: [cron, at]
+
+- name: Disable core dumps for setuid programs
+  ansible.builtin.copy:
+    content: "* hard core 0\n"
+    dest: /etc/security/limits.d/50-coredump.conf
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Enable auditd and AppArmor
+  ansible.builtin.service:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop: [auditd, apparmor]

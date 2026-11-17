@@ -1,0 +1,60 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: restrict-images
+  annotations:
+    policies.kyverno.io/title: Trusted registry, pinned tag, resource limits
+    policies.kyverno.io/severity: medium
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: trusted-registry
+      match:
+        any:
+          - resources:
+              kinds: ["Pod"]
+              namespaces: ["kb-assistant"]
+      validate:
+        message: "Images must come from ghcr.io/golovastik777/."
+        pattern:
+          spec:
+            =(initContainers):
+              - image: "ghcr.io/golovastik777/*"
+            containers:
+              - image: "ghcr.io/golovastik777/*"
+    - name: no-latest-tag
+      match:
+        any:
+          - resources:
+              kinds: ["Pod"]
+      validate:
+        message: "Images must use an explicit tag or digest other than :latest."
+        foreach:
+          - list: "request.object.spec.containers"
+            deny:
+              conditions:
+                any:
+                  - key: "{{ element.image }}"
+                    operator: Equals
+                    value: "*:latest"
+                  - key: "{{ contains(element.image, ':') || contains(element.image, '@') }}"
+                    operator: Equals
+                    value: false
+    - name: requests-and-limits
+      match:
+        any:
+          - resources:
+              kinds: ["Pod"]
+              namespaces: ["kb-assistant"]
+      validate:
+        message: "CPU/memory requests and memory limits are required."
+        pattern:
+          spec:
+            containers:
+              - resources:
+                  requests:
+                    cpu: "?*"
+                    memory: "?*"
+                  limits:
+                    memory: "?*"

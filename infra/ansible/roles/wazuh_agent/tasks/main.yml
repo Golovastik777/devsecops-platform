@@ -1,0 +1,52 @@
+- name: Require a manager address
+  ansible.builtin.assert:
+    that: wazuh_agent_manager_address | length > 0
+    fail_msg: Set wazuh_agent_manager_address (private IP of the Wazuh manager)
+
+- name: Add Wazuh apt repository (signed)
+  ansible.builtin.deb822_repository:
+    name: wazuh
+    types: [deb]
+    uris: "https://packages.wazuh.com/{{ wazuh_agent_major_version }}/apt/"
+    suites: [stable]
+    components: [main]
+    signed_by: https://packages.wazuh.com/key/GPG-KEY-WAZUH
+    state: present
+
+- name: Install Wazuh agent
+  ansible.builtin.apt:
+    name: wazuh-agent
+    state: present
+    update_cache: true
+  environment:
+    WAZUH_MANAGER: "{{ wazuh_agent_manager_address }}"
+    WAZUH_AGENT_GROUP: "{{ wazuh_agent_group }}"
+
+- name: Point the agent at the manager
+  ansible.builtin.replace:
+    path: /var/ossec/etc/ossec.conf
+    regexp: '<address>.*</address>'
+    replace: '<address>{{ wazuh_agent_manager_address }}</address>'
+  notify: Restart wazuh-agent
+
+- name: Disable remote command execution from the manager
+  ansible.builtin.template:
+    src: local_internal_options.conf.j2
+    dest: /var/ossec/etc/local_internal_options.conf
+    owner: root
+    group: wazuh
+    mode: "0640"
+  notify: Restart wazuh-agent
+
+- name: Ship JSON security logs
+  ansible.builtin.blockinfile:
+    path: /var/ossec/etc/ossec.conf
+    marker: "<!-- {mark} ANSIBLE MANAGED: json localfiles -->"
+    block: "{{ lookup('ansible.builtin.template', 'ossec-localfiles.xml.j2') }}"
+  notify: Restart wazuh-agent
+
+- name: Enable Wazuh agent
+  ansible.builtin.service:
+    name: wazuh-agent
+    enabled: true
+    state: started
