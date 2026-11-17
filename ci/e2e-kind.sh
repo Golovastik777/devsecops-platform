@@ -16,7 +16,12 @@ kind load docker-image "$IMAGE" --name "$CLUSTER"
 log "Kyverno (chart $KYVERNO_CHART_VERSION)"
 helm upgrade --install kyverno kyverno --repo https://kyverno.github.io/kyverno/ \
   --version "$KYVERNO_CHART_VERSION" -n kyverno --create-namespace --wait --timeout 6m
-kubectl apply -f security/kyverno/policies/
+# The admission webhook needs a few seconds after the Deployment is Ready.
+for attempt in $(seq 1 30); do
+  kubectl apply -f security/kyverno/policies/ && break
+  [ "$attempt" -eq 30 ] && exit 1
+  sleep 5
+done
 kubectl wait --for=condition=Ready clusterpolicy --all --timeout=180s
 
 log "Deploy kb-assistant"

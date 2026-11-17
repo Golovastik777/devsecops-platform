@@ -1,8 +1,6 @@
 # syntax=docker/dockerfile:1.7
-# Base image pinned by digest; Dependabot proposes digest bumps.
-ARG PYTHON_IMAGE=python:3.12-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b
-
-FROM ${PYTHON_IMAGE} AS build
+# Base image pinned by digest (written out in each FROM so scanners and Dependabot can read it).
+FROM python:3.12-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b AS build
 ENV PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1
 WORKDIR /build
 COPY requirements.txt .
@@ -11,7 +9,7 @@ RUN python -m venv /opt/venv \
  && /opt/venv/bin/pip install --no-deps --require-hashes -r requirements.txt \
  && /opt/venv/bin/pip uninstall -y pip
 
-FROM ${PYTHON_IMAGE} AS runtime
+FROM python:3.12-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b AS runtime
 LABEL org.opencontainers.image.source="https://github.com/Golovastik777/devsecops-platform" \
       org.opencontainers.image.title="kb-assistant"
 # Pull Debian security fixes released after the base image was built, then remove the

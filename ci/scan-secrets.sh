@@ -2,7 +2,8 @@
 # Secret scanning of the whole git history (not only the working tree).
 source "$(dirname "$0")/lib.sh"
 log "gitleaks: full git history"
-expected=$(git rev-list --all --count)
+# Merge commits carry no diff of their own, so gitleaks does not count them.
+expected=$(git rev-list --all --no-merges --count)
 out=$(gitleaks git --no-banner --redact --exit-code 0 \
   --config .gitleaks.toml \
   --report-format json --report-path "$REPORTS_DIR/gitleaks.json" . 2>&1) || true
