@@ -65,9 +65,14 @@ def is_blocking(f: Finding, policy: dict) -> bool:
     return True
 
 
+SARIF_TOOLS = ["checkov", "gitleaks", "semgrep", "trivy"]
+
+
 def to_sarif(findings: list[Finding]) -> dict:
+    # One run per file-based scanner even when it found nothing: GitHub rejects a SARIF
+    # file without runs, and an empty run closes alerts that were fixed.
     runs = []
-    for tool in sorted({f.tool for f in findings if f.category in FILE_CATEGORIES}):
+    for tool in sorted(set(SARIF_TOOLS) | {f.tool for f in findings if f.category in FILE_CATEGORIES}):
         items = [f for f in findings if f.tool == tool and f.category in FILE_CATEGORIES]
         rules = {f.rule_id: {"id": f.rule_id, "shortDescription": {"text": f.title[:200] or f.rule_id}} for f in items}
         results = [{

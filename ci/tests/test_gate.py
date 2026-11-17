@@ -66,10 +66,15 @@ def test_exceptions_must_be_complete_and_short_lived():
 def test_sarif_contains_only_file_findings(tmp_path):
     write_reports(tmp_path)
     sarif = to_sarif(load_findings(tmp_path)[0])
-    tools = {run["tool"]["driver"]["name"] for run in sarif["runs"]}
-    assert tools == {"gitleaks", "semgrep", "checkov"}
-    region = sarif["runs"][0]["results"][0]["locations"][0]["physicalLocation"]["region"]
+    runs = {run["tool"]["driver"]["name"]: run for run in sarif["runs"]}
+    assert set(runs) == {"checkov", "gitleaks", "semgrep", "trivy"}
+    assert runs["trivy"]["results"] == []  # image CVEs have no file location
+    region = runs["gitleaks"]["results"][0]["locations"][0]["physicalLocation"]["region"]
     assert region["startLine"] >= 1
+
+
+def test_sarif_is_never_empty():
+    assert len(to_sarif([])["runs"]) == 4
 
 
 def test_defectdojo_reimport_request(tmp_path):
