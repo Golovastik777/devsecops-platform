@@ -1,0 +1,27 @@
+# GitOps: the cluster follows deploy/k8s on main. Manual changes in the cluster are reverted
+# (selfHeal) and resources removed from git are deleted (prune).
+# The kind e2e test (ci/e2e-kind.sh) points this Application at the tested commit and overlay.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kb-assistant
+  namespace: argocd
+spec:
+  project: kb-assistant
+  source:
+    repoURL: https://github.com/Golovastik777/devsecops-platform.git
+    targetRevision: main
+    path: deploy/k8s/base
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kb-assistant
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 5
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m

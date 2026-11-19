@@ -19,6 +19,7 @@ NUCLEI_IMAGE="projectdiscovery/nuclei:v3.11.1"
 ZAP_IMAGE="zaproxy/zap-stable:2.17.0"
 KUBECONFORM_IMAGE="ghcr.io/yannh/kubeconform:v0.8.0"
 TERRAFORM_IMAGE="hashicorp/terraform:1.17.1"
+PROMETHEUS_IMAGE="prom/prometheus:v3.15.0"
 
 DOCKER_NETWORK="${DOCKER_NETWORK:-host}"
 
@@ -46,5 +47,6 @@ kyverno()     { run_tool kyverno     "$KYVERNO_IMAGE"     /ko-app/kubectl-kyvern
 nuclei()      { run_tool nuclei      "$NUCLEI_IMAGE"      nuclei                    "$@"; }
 kubeconform() { run_tool kubeconform "$KUBECONFORM_IMAGE" /kubeconform              "$@"; }
 terraform()   { run_tool terraform   "$TERRAFORM_IMAGE"   /bin/terraform            "$@"; }
+promtool()    { run_tool promtool    "$PROMETHEUS_IMAGE"  /bin/promtool             "$@"; }
 
 log() { printf '\n==> %s\n' "$*"; }

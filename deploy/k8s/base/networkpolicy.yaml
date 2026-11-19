@@ -26,6 +26,13 @@ spec:
               kubernetes.io/metadata.name: ingress-nginx
       ports:
         - port: 8080
+    # Prometheus may scrape the metrics port, and nothing else.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - port: 9100
   egress:
     - to:
         - namespaceSelector:

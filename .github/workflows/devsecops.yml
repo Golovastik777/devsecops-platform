@@ -101,7 +101,7 @@ jobs:
           ansible-galaxy collection install -r requirements.yml
           ansible-playbook --syntax-check hardening.yml
           ansible-lint --offline hardening.yml roles/
-      - name: Kyverno, Falco, Terraform, kubeconform, Nuclei templates, Wazuh rules
+      - name: Kyverno, Falco, Terraform, kubeconform, promtool, Nuclei templates, Wazuh rules
         run: bash ci/test-policies.sh
 
   image:
@@ -161,7 +161,7 @@ jobs:
         with:
           version: v0.33.0
           cluster_name: devsecops
-      - name: Kyverno + PSA admission, rollout, NetworkPolicy
+      - name: Argo CD sync, PSA + Kyverno admission, NetworkPolicy, Prometheus, self-heal
         env:
           KIND_CLUSTER: devsecops
         run: bash ci/e2e-kind.sh
@@ -170,6 +170,7 @@ jobs:
         run: |
           kubectl get pods -A -o wide
           kubectl -n kb-assistant describe pods
+          kubectl -n argocd get application kb-assistant -o yaml || true
           kubectl get policyreports -A || true
 
   security-gate:

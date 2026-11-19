@@ -17,6 +17,7 @@ from . import __version__
 from .config import Settings, load_settings
 from .guardrails import check_input, check_output, llama_guard_check, sanitize_context
 from .llm import ClaudeGenerator, ExtractiveGenerator, Generator
+from .metrics import GUARDRAIL, LATENCY, RATE_LIMITED, REQUESTS, endpoint_label, start_metrics_server
 from .rag import Index
 
 SECURITY_HEADERS = {
@@ -46,8 +47,12 @@ def _setup_logging() -> None:
 
 
 def log_event(event: str, **fields) -> None:
-    """One JSON line per security event, picked up by the log shipper (Wazuh / ELK)."""
+    """One JSON line per security event (for Wazuh) plus a Prometheus counter (for alerting)."""
     security_log.info(json.dumps({"ts": time.time(), "event": event, **fields}, ensure_ascii=False))
+    if event.startswith("guardrail_"):
+        GUARDRAIL.labels(layer=fields.get("layer", "unknown"), action=event.removeprefix("guardrail_")).inc()
+    elif event == "rate_limited":
+        RATE_LIMITED.inc()
 
 
 class RateLimiter:
@@ -88,18 +93,24 @@ def create_app(settings: Settings | None = None, generator: Generator | None = N
             else ExtractiveGenerator()
         )
     limiter = RateLimiter(settings.rate_limit_per_minute)
+    if settings.metrics_port:
+        start_metrics_server(settings.metrics_port)
 
     # No interactive API docs in a production service.
     app = FastAPI(title="kb-assistant", version=__version__, docs_url=None, redoc_url=None, openapi_url=None)
 
     @app.middleware("http")
     async def harden(request: Request, call_next):
+        started = time.perf_counter()
         declared = request.headers.get("content-length")
         if declared and (not declared.isdigit() or int(declared) > settings.max_body_bytes):
             response = JSONResponse({"detail": "Payload too large"}, status_code=413)
         else:
             response = await call_next(request)
         response.headers.update(SECURITY_HEADERS)
+        endpoint = endpoint_label(request.url.path)
+        REQUESTS.labels(endpoint=endpoint, method=request.method, status=str(response.status_code)).inc()
+        LATENCY.labels(endpoint=endpoint).observe(time.perf_counter() - started)
         return response
 
     @app.get("/")

@@ -26,10 +26,11 @@ COPY kb /app/kb
 ENV PATH=/opt/venv/bin:$PATH \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    KB_DIR=/app/kb
+    KB_DIR=/app/kb \
+    METRICS_PORT=9100
 WORKDIR /app
 USER 10001:10001
-EXPOSE 8080
+EXPOSE 8080 9100
 HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
   CMD ["python", "-c", "import sys, urllib.request; sys.exit(urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=2).status != 200)"]
 ENTRYPOINT ["uvicorn", "--factory", "kb_assistant.main:create_app", "--host", "0.0.0.0", "--port", "8080", "--no-server-header"]

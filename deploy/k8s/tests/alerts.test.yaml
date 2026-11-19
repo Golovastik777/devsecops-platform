@@ -1,0 +1,76 @@
+# promtool test rules: the rules are extracted from base/prometheusrule.yaml by ci/test-policies.sh
+rule_files:
+  - ../../../.cache/prometheus/kb-assistant.rules.yaml
+evaluation_interval: 1m
+tests:
+  - name: prompt-injection probing fires after 5 minutes
+    interval: 1m
+    input_series:
+      - series: 'kb_assistant_guardrail_events_total{layer="input",action="block",pod="kb-assistant-a"}'
+        values: '0+10x20'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: KbAssistantPromptInjectionSpike
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: KbAssistantPromptInjectionSpike
+        exp_alerts:
+          - exp_labels: {severity: warning, category: security}
+            exp_annotations:
+              summary: More than 5 prompts per minute blocked by the input guardrail - likely probing
+              runbook: docs/incident-response.md
+
+  - name: a few blocked prompts are normal traffic
+    interval: 1m
+    input_series:
+      - series: 'kb_assistant_guardrail_events_total{layer="input",action="block",pod="kb-assistant-a"}'
+        values: '0+2x20'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: KbAssistantPromptInjectionSpike
+        exp_alerts: []
+
+  - name: one blocked prompt leak is critical immediately
+    interval: 1m
+    input_series:
+      - series: 'kb_assistant_guardrail_events_total{layer="output",action="block",pod="kb-assistant-a"}'
+        values: '0 0 0 1 1 1'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: KbAssistantPromptLeakBlocked
+        exp_alerts:
+          - exp_labels: {severity: critical, category: security}
+            exp_annotations:
+              summary: The output guardrail blocked an answer containing the system prompt canary
+              runbook: docs/incident-response.md
+
+  - name: scrape target down
+    interval: 1m
+    input_series:
+      - series: 'up{job="kb-assistant",instance="10.0.0.7:9100"}'
+        values: '1 0 0 0 0 0'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: KbAssistantTargetDown
+        exp_alerts: []
+      - eval_time: 4m
+        alertname: KbAssistantTargetDown
+        exp_alerts:
+          - exp_labels: {severity: critical, job: kb-assistant, instance: "10.0.0.7:9100"}
+            exp_annotations:
+              summary: kb-assistant instance 10.0.0.7:9100 is not reachable for scraping
+
+  - name: 10% of requests fail with 5xx
+    interval: 1m
+    input_series:
+      - series: 'kb_assistant_requests_total{endpoint="/api/v1/ask",method="POST",status="500"}'
+        values: '0+10x30'
+      - series: 'kb_assistant_requests_total{endpoint="/api/v1/ask",method="POST",status="200"}'
+        values: '0+90x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: KbAssistantHighErrorRate
+        exp_alerts:
+          - exp_labels: {severity: warning}
+            exp_annotations:
+              summary: More than 5% of kb-assistant requests fail with 5xx

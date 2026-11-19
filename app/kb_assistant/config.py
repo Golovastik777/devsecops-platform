@@ -36,6 +36,7 @@ class Settings:
     llama_guard_model: str = "llama-guard3:1b"
     llama_guard_fail_closed: bool = True
     canary: str = ""
+    metrics_port: int | None = None
 
 
 def load_settings() -> Settings:
@@ -53,4 +54,5 @@ def load_settings() -> Settings:
         # A per-process canary token is planted in the system prompt; seeing it in
         # an answer means the prompt leaked.
         canary=os.getenv("PROMPT_CANARY") or f"cnry-{secrets.token_hex(8)}",
+        metrics_port=int(os.getenv("METRICS_PORT")) if os.getenv("METRICS_PORT") else None,
     )

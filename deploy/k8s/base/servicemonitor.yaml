@@ -1,0 +1,14 @@
+# Scraped by the Prometheus Operator (kube-prometheus-stack in namespace "monitoring").
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: kb-assistant
+  namespace: kb-assistant
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kb-assistant
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 15s

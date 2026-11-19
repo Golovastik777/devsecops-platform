@@ -1,0 +1,54 @@
+# Alerts for kb-assistant. Unit tests: deploy/k8s/tests/alerts.test.yaml (promtool test rules).
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: kb-assistant
+  namespace: kb-assistant
+spec:
+  groups:
+    - name: kb-assistant.availability
+      rules:
+        - alert: KbAssistantTargetDown
+          expr: up{job="kb-assistant"} == 0
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "kb-assistant instance {{ $labels.instance }} is not reachable for scraping"
+        - alert: KbAssistantHighErrorRate
+          expr: |
+            sum(rate(kb_assistant_requests_total{status=~"5.."}[5m]))
+              / sum(rate(kb_assistant_requests_total[5m])) > 0.05
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "More than 5% of kb-assistant requests fail with 5xx"
+        - alert: KbAssistantHighLatency
+          expr: |
+            histogram_quantile(0.95,
+              sum by (le) (rate(kb_assistant_request_duration_seconds_bucket{endpoint="/api/v1/ask"}[5m]))) > 5
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "p95 latency of /api/v1/ask is above 5s"
+    - name: kb-assistant.security
+      rules:
+        - alert: KbAssistantPromptInjectionSpike
+          expr: sum(rate(kb_assistant_guardrail_events_total{layer="input",action="block"}[5m])) * 60 > 5
+          for: 5m
+          labels:
+            severity: warning
+            category: security
+          annotations:
+            summary: "More than 5 prompts per minute blocked by the input guardrail - likely probing"
+            runbook: docs/incident-response.md
+        - alert: KbAssistantPromptLeakBlocked
+          expr: sum(increase(kb_assistant_guardrail_events_total{layer="output",action="block"}[10m])) > 0
+          labels:
+            severity: critical
+            category: security
+          annotations:
+            summary: "The output guardrail blocked an answer containing the system prompt canary"
+            runbook: docs/incident-response.md

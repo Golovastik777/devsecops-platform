@@ -14,6 +14,12 @@ spec:
         any:
           - resources:
               kinds: ["Pod"]
+      # Platform namespaces run vendor charts (Kyverno, Argo CD, Prometheus) with their own
+      # hardening; they are excluded explicitly instead of weakening the rules for workloads.
+      exclude:
+        any:
+          - resources:
+              namespaces: [kube-system, kube-public, local-path-storage, kyverno, argocd, monitoring]
       validate:
         message: "Pods must set securityContext.runAsNonRoot=true."
         pattern:
@@ -25,6 +31,12 @@ spec:
         any:
           - resources:
               kinds: ["Pod"]
+      # Platform namespaces run vendor charts (Kyverno, Argo CD, Prometheus) with their own
+      # hardening; they are excluded explicitly instead of weakening the rules for workloads.
+      exclude:
+        any:
+          - resources:
+              namespaces: [kube-system, kube-public, local-path-storage, kyverno, argocd, monitoring]
       validate:
         message: "Containers must use readOnlyRootFilesystem=true."
         pattern:

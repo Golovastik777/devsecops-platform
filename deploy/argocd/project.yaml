@@ -1,0 +1,28 @@
+# Argo CD project for kb-assistant: one source repository, one namespace, a fixed list of kinds.
+# A compromised or mistaken commit cannot deploy cluster-wide objects or touch other namespaces.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: kb-assistant
+  namespace: argocd
+spec:
+  description: kb-assistant workloads, deployed only from this repository into their own namespace
+  sourceRepos:
+    - https://github.com/Golovastik777/devsecops-platform.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: kb-assistant
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+  namespaceResourceWhitelist:
+    - {group: "", kind: ServiceAccount}
+    - {group: "", kind: Service}
+    - {group: apps, kind: Deployment}
+    - {group: networking.k8s.io, kind: NetworkPolicy}
+    - {group: rbac.authorization.k8s.io, kind: Role}
+    - {group: rbac.authorization.k8s.io, kind: RoleBinding}
+    - {group: monitoring.coreos.com, kind: ServiceMonitor}
+    - {group: monitoring.coreos.com, kind: PrometheusRule}
+  orphanedResources:
+    warn: true
