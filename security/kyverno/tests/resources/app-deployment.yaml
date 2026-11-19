@@ -34,7 +34,11 @@ spec:
           ports:
             - name: http
               containerPort: 8080
+            - name: metrics
+              containerPort: 9100
           env:
+            - name: METRICS_PORT
+              value: "9100"
             - name: ANTHROPIC_API_KEY_FILE
               value: /var/run/secrets/llm/api-key
             - name: STAFF_TOKEN_FILE

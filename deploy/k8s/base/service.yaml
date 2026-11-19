@@ -3,6 +3,8 @@ kind: Service
 metadata:
   name: kb-assistant
   namespace: kb-assistant
+  labels:
+    app.kubernetes.io/name: kb-assistant  # selected by the ServiceMonitor
 spec:
   selector:
     app.kubernetes.io/name: kb-assistant

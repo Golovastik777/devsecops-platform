@@ -105,7 +105,8 @@ promq() {  # promq <promql> -> numeric value of the first sample, or empty
     | python3 -c 'import json,sys; r=json.load(sys.stdin)["data"]["result"]; print(r[0]["value"][1] if r else "")'
 }
 wait_for 30 "Prometheus API" curl -fsS http://127.0.0.1:19090/-/ready
-wait_for 180 "both kb-assistant targets up" bash -c "[ \"\$(curl -fsS --get http://127.0.0.1:19090/api/v1/query --data-urlencode 'query=sum(up{job=\"kb-assistant\"})' | python3 -c 'import json,sys; r=json.load(sys.stdin)[\"data\"][\"result\"]; print(r[0][\"value\"][1] if r else 0)')\" = 2 ]"
+wait_for 180 "both kb-assistant targets up" bash -c "[ \"\$(curl -fsS --get http://127.0.0.1:19090/api/v1/query --data-urlencode 'query=sum(up{job=\"kb-assistant\"})' | python3 -c 'import json,sys; r=json.load(sys.stdin)[\"data\"][\"result\"]; print(r[0][\"value\"][1] if r else 0)')\" = 2 ]" \
+  || { curl -fsS http://127.0.0.1:19090/api/v1/targets | python3 -c 'import json,sys; [print(t["labels"].get("job"), t["health"], t["scrapeUrl"], t.get("lastError","")) for t in json.load(sys.stdin)["data"]["activeTargets"]]'; kubectl -n kb-assistant get svc,servicemonitor --show-labels; exit 1; }
 wait_for 30 "app port-forward" curl -fsS http://127.0.0.1:18081/healthz
 for _ in 1 2 3; do
   curl -s -o /dev/null -w 'injection attempt -> HTTP %{http_code}\n' -X POST http://127.0.0.1:18081/api/v1/ask \

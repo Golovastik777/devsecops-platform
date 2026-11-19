@@ -23,6 +23,8 @@ and how its findings are triaged.
 | LLM security testing | Prompt-injection red-team suite, Nuclei guardrail template | `security/llm-redteam/` |
 | Kubernetes admission | Pod Security Admission `restricted`, Kyverno policies with unit tests | `deploy/k8s/`, `security/kyverno/` |
 | Kubernetes isolation | Least-privilege RBAC, default-deny NetworkPolicies | `deploy/k8s/base/` |
+| GitOps | Argo CD: restricted AppProject, auto-sync with prune and self-heal | `deploy/argocd/` |
+| Monitoring and alerting | Prometheus Operator: app metrics, ServiceMonitor, PrometheusRule with promtool unit tests | `deploy/k8s/base/`, `deploy/k8s/tests/` |
 | Runtime detection | Falco rules | `deploy/falco/` |
 | Security monitoring | Wazuh rules for app guardrail events and Falco alerts | `deploy/wazuh/`, `infra/ansible/roles/wazuh_agent` |
 | Infrastructure | Terraform: AWS, Hetzner, DigitalOcean | `infra/terraform/` |
@@ -40,7 +42,7 @@ flowchart LR
   end
   B[Build image] --> I[Trivy image + SBOM]
   I --> D[DAST: ZAP, Nuclei, LLM red-team]
-  I --> K[kind e2e: PSA + Kyverno admission, NetworkPolicy]
+  I --> K[kind e2e: Argo CD sync, PSA + Kyverno, NetworkPolicy, Prometheus, self-heal]
   static --> G
   D --> G
   K --> G
@@ -108,14 +110,32 @@ Own Semgrep rules check LLM-specific code risks: model output reaching `eval`/sh
 * Kyverno policies (`Enforce`): no privileged containers or escalation, non-root, read-only
   rootfs, drop ALL, no host namespaces or hostPath, trusted registry, no `:latest`,
   requests/limits. Each rule has a passing and a failing fixture (`kyverno test`, 18 cases).
-* The kind e2e job installs Kyverno, rolls the app out, then proves that every insecure
-  fixture is rejected at admission (PSA catches the baseline violations, Kyverno the
-  organisation rules PSA does not cover) and that the app is reachable only from the
-  `ingress-nginx` namespace.
+* The kind e2e job installs kube-prometheus-stack, Argo CD and Kyverno, lets Argo CD sync the
+  tested commit, then proves that:
+  * every insecure fixture is rejected at admission (PSA catches the baseline violations,
+    Kyverno the organisation rules PSA does not cover);
+  * the app is reachable only from the `ingress-nginx` namespace;
+  * Prometheus scrapes both replicas, the guardrail counters move after injection attempts and
+    all alert rules are loaded;
+  * a manual scale-down in the cluster is reverted by Argo CD (self-heal).
+* Kyverno rules exclude platform namespaces (`kyverno`, `argocd`, `monitoring`, `kube-system`)
+  explicitly, instead of weakening the rules for application workloads.
 * CI deploy identity: a Role that can patch only the `kb-assistant` Deployment and watch the
   rollout. No Secrets, no `pods/exec`, nothing cluster-wide.
 * Falco rules: shell or unexpected binaries in the app container, unexpected outbound
   connections, outbound SSH bursts, mining-pool ports, sensitive file reads.
+
+## GitOps and monitoring
+
+* **Argo CD.** `deploy/argocd/project.yaml` limits the project to this repository, the
+  `kb-assistant` namespace and a fixed list of kinds, so a bad commit cannot create
+  cluster-wide objects. The Application syncs automatically with prune and self-heal.
+* **Metrics.** The app serves Prometheus metrics on a separate port (9100), so `/metrics` is
+  never exposed through the ingress; the NetworkPolicy lets only the `monitoring` namespace
+  scrape it. Unknown request paths collapse into one label value to keep cardinality bounded.
+* **Alerts** (`PrometheusRule`): target down, 5xx rate above 5%, p95 latency above 5 s,
+  prompt-injection probing (more than 5 blocked prompts per minute), and any blocked system
+  prompt leak. Every alert has a `promtool test rules` case in `deploy/k8s/tests/alerts.test.yaml`.
 
 ## Infrastructure
 
@@ -149,9 +169,9 @@ Requirements: Docker, Python 3.12, kubectl; kind and helm for the e2e test.
 ```bash
 make test        # unit tests: app, gate, DefectDojo client, triage agent
 make scan        # secrets, SAST, SCA, IaC, image + SBOM, then the security gate
-make policies    # kyverno test, falco -V, terraform validate, kubeconform, nuclei -validate
+make policies    # kyverno test, falco -V, terraform validate, kubeconform, promtool, nuclei -validate
 make dast        # run the container and attack it: ZAP, Nuclei, LLM red-team
-make e2e         # kind cluster: admission control and NetworkPolicy checks
+make e2e         # kind cluster: Argo CD, Kyverno, NetworkPolicy, Prometheus, self-heal
 ```
 
 Reports land in `reports/`.
