@@ -1,0 +1,6 @@
+config:
+  gcp:project: kb-assistant-prod
+  gcp:region: europe-west3
+  kb-assistant-cloud:cloud: gcp
+  kb-assistant-cloud:adminCidrs:
+    - 198.51.100.0/24

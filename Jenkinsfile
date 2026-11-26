@@ -37,6 +37,15 @@ pipeline {
         stage('SAST')    { steps { sh 'bash ci/scan-sast.sh' } }
         stage('SCA')     { steps { sh 'bash ci/scan-deps.sh' } }
         stage('IaC')     { steps { sh 'bash ci/scan-iac.sh' } }
+        stage('Pulumi tests') {
+          steps {
+            sh '''
+              python3 -m venv .venv-pulumi
+              .venv-pulumi/bin/pip install -q --require-hashes -r infra/pulumi/requirements.txt
+              (cd infra/pulumi && ../../.venv-pulumi/bin/python -m pytest)
+            '''
+          }
+        }
         stage('Policy tests') {
           steps {
             sh '''

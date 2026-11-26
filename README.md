@@ -28,6 +28,7 @@ and how its findings are triaged.
 | Runtime detection | Falco rules | `deploy/falco/` |
 | Security monitoring | Wazuh rules for app guardrail events and Falco alerts | `deploy/wazuh/`, `infra/ansible/roles/wazuh_agent` |
 | Infrastructure | Terraform: AWS, Hetzner, DigitalOcean | `infra/terraform/` |
+| Production platform as code | Pulumi (Python): AWS EKS/ECR/RDS and GCP GKE/Artifact Registry/Cloud SQL, unit-tested with mocks | `infra/pulumi/` |
 | Host hardening | Ansible, CIS-inspired baseline | `infra/ansible/` |
 | Vulnerability management | DefectDojo import, security gate, time-limited exceptions | `ci/upload_defectdojo.py`, `ci/security_gate.py`, `.security/` |
 | AI-assisted triage | Claude agent with read-only code tools | `triage/ai_triage.py` |
@@ -145,6 +146,17 @@ Own Semgrep rules check LLM-specific code risks: model output reaching `eval`/sh
 * **Hetzner**: security tooling host (DefectDojo, Wazuh manager) behind a firewall,
   SSH only from admin networks (validated in Terraform), key-only access from first boot.
 * **DigitalOcean**: HA Kubernetes cluster in a private VPC with auto-upgrades.
+* **Pulumi (Python)**: the production platform for either cloud, chosen per stack
+  (`aws-prod`, `gcp-prod`):
+  * AWS: VPC with private subnets, NAT and flow logs; EKS with an allow-listed public endpoint,
+    KMS-encrypted secrets and audit logs; nodes in private subnets with IMDSv2 only; ECR with
+    immutable tags, scan on push and KMS; RDS PostgreSQL that is private, encrypted, Multi-AZ,
+    reachable only from the cluster security group, with the master password in Secrets Manager.
+  * GCP: private GKE with authorized networks, Workload Identity, Dataplane V2 and shielded
+    nodes on a dedicated service account; Artifact Registry with immutable tags; Cloud SQL
+    PostgreSQL on a private IP only, TLS required, regional HA and point-in-time recovery.
+  * `infra/pulumi/tests` run the program against Pulumi mocks in CI and assert these security
+    properties (no cloud account needed). Making the database public or tags mutable fails them.
 * **Ansible** (`ansible-lint` production profile): key-only SSH with modern ciphers, sysctl
   network and kernel hardening, auditd rules, AppArmor, security-only unattended upgrades,
   Wazuh agent with remote commands disabled.

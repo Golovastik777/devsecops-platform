@@ -1,0 +1,5 @@
+config:
+  aws:region: eu-central-1
+  kb-assistant-cloud:cloud: aws
+  kb-assistant-cloud:adminCidrs:
+    - 198.51.100.0/24

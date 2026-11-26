@@ -70,6 +70,13 @@ policy-tests:
     - (cd infra/ansible && ansible-galaxy collection install -r requirements.yml && ansible-lint --offline hardening.yml roles/)
     - bash ci/test-policies.sh
 
+pulumi:
+  stage: scan
+  script:
+    - python3 -m venv .venv-pulumi
+    - .venv-pulumi/bin/pip install -q --require-hashes -r infra/pulumi/requirements.txt
+    - (cd infra/pulumi && ../../.venv-pulumi/bin/python -m pytest)
+
 image:
   stage: build
   script: [bash ci/build-image.sh]

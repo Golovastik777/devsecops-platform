@@ -104,6 +104,21 @@ jobs:
       - name: Kyverno, Falco, Terraform, kubeconform, promtool, Nuclei templates, Wazuh rules
         run: bash ci/test-policies.sh
 
+  pulumi:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Pulumi unit tests with mocks (AWS EKS/ECR/RDS, GCP GKE/Artifact Registry/Cloud SQL)
+        working-directory: infra/pulumi
+        run: |
+          pip install --require-hashes -r requirements.txt
+          python -m pytest
+
   image:
     runs-on: ubuntu-24.04
     steps:
@@ -174,7 +189,7 @@ jobs:
           kubectl get policyreports -A || true
 
   security-gate:
-    needs: [unit-tests, secrets, sast, sca, iac, policy-tests, image, dast, k8s-e2e]
+    needs: [unit-tests, secrets, sast, sca, iac, policy-tests, pulumi, image, dast, k8s-e2e]
     if: always()
     runs-on: ubuntu-24.04
     permissions:

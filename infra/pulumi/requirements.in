@@ -1,0 +1,4 @@
+pulumi==3.276.0
+pulumi-aws==7.54.0
+pulumi-gcp==10.3.0
+pytest==9.2.0

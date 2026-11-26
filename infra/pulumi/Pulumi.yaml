@@ -1,0 +1,7 @@
+name: kb-assistant-cloud
+description: Production platform for kb-assistant on AWS (EKS, ECR, RDS) or GCP (GKE, Artifact Registry, Cloud SQL)
+runtime:
+  name: python
+  options:
+    toolchain: pip
+    virtualenv: .venv

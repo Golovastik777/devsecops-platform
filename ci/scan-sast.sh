@@ -8,4 +8,4 @@ semgrep scan --metrics=off --disable-version-check --quiet \
   --config p/python --config p/security-audit --config p/secrets \
   --config security/semgrep/rules/ \
   --json --output "$REPORTS_DIR/semgrep.json" \
-  app ci triage security/llm-redteam
+  app ci triage security/llm-redteam infra/pulumi
